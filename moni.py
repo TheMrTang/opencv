@@ -3,6 +3,7 @@ import cv2 as cv2
 import math
 import serial
 import struct
+import pickle
 
 COLOR = (255, 50, 200)
 com = serial.Serial("/dev/ttyTHS1", 115200)
@@ -115,7 +116,8 @@ def draw_line(img, mode, x, y, rat):
     point_y = y + int(0.866 * lenth)
     
     cv2.line(img, (x, y), (point_x, point_y), COLOR, 2)
-    packed_data = struct.pack("<4B", 0x2C, 0x12, point_x, point_y)
+    # packed_data = pickle.dumps(points)
+    packed_data = struct.pack("<2B2h", 0x2C, 0x12, point_x, point_y)
     com.write(packed_data)
     return (point_x, point_y)
 
@@ -146,18 +148,18 @@ def draw_rect(img, mode, center_x, center_y, rat):
     right_down_y = center_y + int(lenth / 2)
     left_down_x = center_x - int(lenth / 2)
     left_down_y = center_y + int(lenth / 2)
-    points.append(left_up_x)
-    points.append(left_up_y)
-    points.append(right_up_x)
-    points.append(right_up_y)
-    points.append(right_down_x)
-    points.append(right_down_y)
-    points.append(left_down_x)
-    points.append(left_down_y)
+
+    points.append((left_up_x, left_up_y))
+    points.append((right_up_x, right_up_y))
+    points.append((right_down_x, right_down_y))
+    points.append((left_down_x, left_down_y))
+
+    packed_data = pickle.dumps(points)
+
     cv2.rectangle(img, (left_up_x, left_up_y), (right_down_x, right_down_y), COLOR, 2)
-    packed_data = struct.pack('<10B', 0x2C, 0x12, *points)
+    # packed_data = struct.pack('<2B8h', 0x2C, 0x12, *points)
     com.write(packed_data)
-    return [(left_up_x, left_up_y), (right_up_x, right_up_y), (right_down_x, right_down_y), (left_down_x, left_down_y)]
+    return points
 
 def draw_circle(img, mode, center_x, center_y, rat):
     """
@@ -191,9 +193,11 @@ def draw_circle(img, mode, center_x, center_y, rat):
     for i in range(num-1):
         i += 1
         cv2.line(img, points[i-1], points[i], COLOR, 2)
+    
+    packed_Data = pickle.dumps(points)
 
-    packed_Data = struct.pack('<102B', 0x2C, 0x12, *points)
-    print(packed_Data)
+    # packed_Data = struct.pack('<2B50h', 0x2C, 0x12, *points)
+    # print(packed_Data)
     com.write(packed_Data)
 
     return points
@@ -219,7 +223,7 @@ API:
 
 '''
 if __name__ == "__main__":
-    img = cv2.imread('E:\PyCharm\Project\OpenCv\sz1\\2.jpg')
+    img = cv2.imread('/home/jetson/桌面/code/2.jpg')
     img = resize_photo(img)
     points, approx = predict(img)
     # 矩形左上角坐标
