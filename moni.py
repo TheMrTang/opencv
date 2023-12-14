@@ -2,11 +2,80 @@ import numpy as np
 import cv2 as cv2
 import math
 import serial
-import struct
+# import struct
 import pickle
 
 COLOR = (255, 50, 200)
-com = serial.Serial("/dev/ttyTHS1", 115200)
+com = serial.Serial('/dev/ttyTHS1', 115200)
+
+def findLaser(img):
+    """
+    找到图片中点绿色激光点与红色激光点并定位中心
+    :param img: 需要处理点图片
+    :return: 绿色激光点中心（x1, y1）;红色激光点中心（x2, y2)
+    """
+    cX1, cY1, cX2, cY2 = None, None, None, None
+    greenLaser = 'green'
+    redLaser = 'red'
+    points = []
+    # 色系下限上限表
+    color_dist = {'red': {'Lower': np.array([0, 60, 60]), 'Upper': np.array([6, 255, 255])},
+                  'green': {'Lower': np.array([35, 43, 35]), 'Upper': np.array([90, 255, 255])},
+                  }
+    # 灰度图像处理
+    # gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # 灰度图
+    # cv2.imshow('gray', gray)
+ 
+    # 高斯滤波
+    blurred = cv2.GaussianBlur(img, (11, 11), 0)
+    # 创建运算核
+    kernel = np.ones((1, 1), np.uint8)
+    # 开运算
+    opening = cv2.morphologyEx(blurred, cv2.MORPH_OPEN, kernel)
+    # 二值化处理
+    thresh = cv2.threshold(opening, 230, 255, cv2.THRESH_BINARY)[1]
+    cv2.imshow('thresh', thresh)
+    # 转化成HSV图像
+    hsv = cv2.cvtColor(thresh, cv2.COLOR_BGR2HSV)  
+    # 颜色二值化筛选处理
+    inRange_hsv_green = cv2.inRange(hsv, color_dist[greenLaser]['Lower'], color_dist[greenLaser]['Upper'])
+    # inRange_hsv_red = cv2.inRange(hsv, color_dist[redLaser]['Lower'], color_dist[redLaser]['Upper'])
+    # cv2.imshow('inrange_hsv_green', inRange_hsv_green)
+    # cv2.imshow('inrange_hsv_red', inRange_hsv_red)
+    # 找绿色激光点
+    try:
+        cnts1 = cv2.findContours(inRange_hsv_green.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+        c1 = max(cnts1, key=cv2.contourArea)
+        M = cv2.moments(c1)
+        cX1 = int(M["m10"] / M["m00"])
+        cY1 = int(M["m01"] / M["m00"])
+        cv2.circle(img, (cX1, cY1), 3, (0, 255, 0), -1)
+        rect = cv2.minAreaRect(c1)
+        box = cv2.boxPoints(rect)
+        cv2.drawContours(img, [np.int0(box)], -1, (0, 255, 0), 2)
+    except:
+        print('没有找到绿色的激光')
+ 
+    # 找红色激光点
+    # try:
+    #     cnts2 = cv2.findContours(inRange_hsv_red.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+    #     c2 = max(cnts2, key=cv2.contourArea)
+    #     M = cv2.moments(c2)
+    #     cX2 = int(M["m10"] / M["m00"])
+    #     cY2 = int(M["m01"] / M["m00"])
+    #     cv2.circle(img, (cX2, cY2), 3, (0, 0, 255), -1)
+    #     rect = cv2.minAreaRect(c2)
+    #     box = cv2.boxPoints(rect)
+    #     cv2.drawContours(img, [np.int0(box)], -1, (0, 0, 255), 2)
+    # except:
+    #     print('没有找到红色的激光')
+
+    points.append((cX1, cY1))   # green
+    points.append((cX2, cY2))   # red
+    packed_Data = pickle.dump(points)
+    com.write(0x2c+0x12+packed_Data)
+
+    return cX1, cY1, cX2, cY2
 
 def imread_photo(filename, flags = cv2.IMREAD_COLOR):
 
@@ -105,6 +174,8 @@ def draw_line(img, mode, x, y, rat):
     输出：
         最终坐标
     """
+    points = []
+
     if mode == 1:
         lenth = 20 / rat
     elif mode == 2:
@@ -114,11 +185,14 @@ def draw_line(img, mode, x, y, rat):
 
     point_x = x + int(0.5 * lenth)
     point_y = y + int(0.866 * lenth)
+    points.append((point_x, point_y))
     
     cv2.line(img, (x, y), (point_x, point_y), COLOR, 2)
-    # packed_data = pickle.dumps(points)
-    packed_data = struct.pack("<2B2h", 0x2C, 0x12, point_x, point_y)
-    com.write(packed_data)
+
+    packed_data = pickle.dumps(points)
+    # packed_data = struct.pack("<2B2h", 0x2C, 0x12, point_x, point_y)
+    com.write(0x2c+0x12+packed_data)
+
     return (point_x, point_y)
 
 def draw_rect(img, mode, center_x, center_y, rat):
@@ -158,7 +232,7 @@ def draw_rect(img, mode, center_x, center_y, rat):
 
     cv2.rectangle(img, (left_up_x, left_up_y), (right_down_x, right_down_y), COLOR, 2)
     # packed_data = struct.pack('<2B8h', 0x2C, 0x12, *points)
-    com.write(packed_data)
+    com.write(0x2c+0x12+packed_data)
     return points
 
 def draw_circle(img, mode, center_x, center_y, rat):
@@ -195,10 +269,7 @@ def draw_circle(img, mode, center_x, center_y, rat):
         cv2.line(img, points[i-1], points[i], COLOR, 2)
     
     packed_Data = pickle.dumps(points)
-
-    # packed_Data = struct.pack('<2B50h', 0x2C, 0x12, *points)
-    # print(packed_Data)
-    com.write(packed_Data)
+    com.write(0x2c+0x12+packed_Data)
 
     return points
 
@@ -223,7 +294,7 @@ API:
 
 '''
 if __name__ == "__main__":
-    img = cv2.imread('/home/jetson/桌面/code/2.jpg')
+    img = cv2.imread("E:\PyCharm\Project\OpenCv\sz1\\2.jpg")
     img = resize_photo(img)
     points, approx = predict(img)
     # 矩形左上角坐标
@@ -241,6 +312,7 @@ if __name__ == "__main__":
     lenth = 30 * 1.41421
     rat = lenth / lenth_pc
 
+    print(findLaser(img))
     cv2.drawContours(img, [approx], -1, COLOR, 2)
     cv2.circle(img, (center_x, center_y),  2, COLOR, -1)
     print(draw_line(img, 2, x, y, rat))
