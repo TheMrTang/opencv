@@ -322,6 +322,60 @@ if __name__ == "__main__":
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
+# import Jetson.GPIO as GPIO
+# import time
+# import math
+
+# # ... 其他代码 ...
+
+# # PID 控制器参数
+# kp = 1.0  # 比例增益
+# ki = 0.1  # 积分增益
+# kd = 0.01 # 微分增益
+
+# # 初始误差
+# error_sum = 0
+# prev_error = 0
+
+# try:
+#     start_time = time.time()
+
+#     while True:
+#         elapsed_time = time.time() - start_time
+
+#         # 计算圆形轨迹上的位置
+#         angle = elapsed_time * speed * 2 * math.pi
+#         x = center_x + radius * math.cos(angle)
+#         y = center_y + radius * math.sin(angle)
+
+#         # 实际位置读取（需要根据实际情况修改）
+#         actual_position_x = read_actual_position_x()
+#         actual_position_y = read_actual_position_y()
+
+#         # 计算误差
+#         error_x = x - actual_position_x
+#         error_y = y - actual_position_y
+
+#         # 累积误差
+#         error_sum += error_x + error_y
+
+#         # PID 控制器输出
+#         output_x = kp * error_x + ki * error_sum + kd * (error_x - prev_error)
+#         output_y = kp * error_y + ki * error_sum + kd * (error_y - prev_error)
+
+#         # 设置云台位置
+#         pan_pwm.ChangeDutyCycle(center_x + output_x)
+#         tilt_pwm.ChangeDutyCycle(center_y + output_y)
+
+#         # 保存当前误差作为下一步的微分项
+#         prev_error = error_x
+
+#         time.sleep(0.02)  # 控制频率，根据需要调整
+
+# except KeyboardInterrupt:
+#     pass
+
+# ... 其他代码 ...
 
 
 # import cv2
