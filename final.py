@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import time
 import math
+import serial
+# import struct
 
 COLOR = (255, 50, 200)
 cX1, cY1, cX2, cY2 = None, None, None, None
@@ -9,6 +11,21 @@ rat = None
 center_x = None
 center_y = None
 PI = 3.141592657
+com = serial.Serial("/dev/ttyTHS1",115200)
+
+def recv(com):
+	while 1:
+		if com.in_waiting > 0:
+			data = []
+			data = com.read(10)
+			if data == '' :
+				continue
+			else:
+				break
+		return data
+
+def send_data(com, data):
+	com.write(data)
 
 def findLaser(img):
 	"""
@@ -112,7 +129,7 @@ def find_contour(img):
 	get_jiguang(img)
 	if cX1 == None or cX2 == None:
 		time.sleep(0.2)
-	return [(cX1, cY1), (cX2, cY2)]
+	return [cX1, cY1, cX2, cY2]
 
 def Calculated_constant():
 	global cX1, cY1
@@ -153,7 +170,7 @@ def draw_line(img, lenth, x, y, rat, angle):
 	# packed_data = struct.pack("<2B2h", 0x2C, 0x12, point_x, point_y)
 	# com.write(0x2c+0x12+packed_data)
 
-	return (point_x, point_y)
+	return [point_x, point_y]
 
 def draw_rect(img, lenth, center_x, center_y, rat):
 	"""
@@ -178,10 +195,14 @@ def draw_rect(img, lenth, center_x, center_y, rat):
 	left_down_x = center_x - int(lenth / 2)
 	left_down_y = center_y + int(lenth / 2)
 
-	points.append((left_up_x, left_up_y))
-	points.append((right_up_x, right_up_y))
-	points.append((right_down_x, right_down_y))
-	points.append((left_down_x, left_down_y))
+	points.append(left_up_x)
+	points.append(left_up_y)
+	points.append(right_up_x)
+	points.append(right_up_y)
+	points.append(right_down_x)
+	points.append(right_down_y)
+	points.append(left_down_x)
+	points.append(left_down_y)
 
 	# packed_data = pickle.dumps(points)
 
@@ -213,10 +234,11 @@ def draw_circle(img, radius, center_x, center_y, rat):
 	for i in range(num):
 		point_x = center_x + int(R * math.cos(i * alpha))
 		point_y = center_y + int(R * math.sin(i * alpha))
-		points.append((point_x, point_y))
+		points.append(point_x)
+		points.append(point_y)
 	
 	# 在图像上绘制连接圆上相邻点的线段
-	for i in range(num-1):
+	for i in range(2*num-1):
 		i += 1
 		cv2.line(img, points[i-1], points[i], COLOR, 2)
 	
@@ -231,13 +253,24 @@ if __name__ == '__main__':
 	while cap.isOpened():
 		_, frame = cap.read()
 		img = resize_photo(frame)
-		find_contour(img)
-		Calculated_constant()
-		if cX1 != None and cX2 != None :
-			cv2.circle(img, (center_x, center_y),  2, COLOR, -1)
-			draw_line(img, 20, cX1, cY1, rat, 30)
-			draw_rect(img, 20, center_x, center_y, rat)
-			draw_circle(img, 10, center_x, center_y, rat)
+		if recv(com) == 0x01:
+			data = find_contour(img)
+			for i in range(len(data)):
+				send_data(com, data[i])
+			Calculated_constant()
+			# cv2.circle(img, (center_x, center_y),  2, COLOR, -1)
+		elif recv(com) == 0x02:
+			data = draw_line(img, 20, cX1, cY1, rat, 30)
+			for i in range(len(data)):
+				send_data(com, data[i])
+		elif recv(com) == 0x03:
+			data = draw_rect(img, 20, center_x, center_y, rat)
+			for i in range(len(data)):
+				send_data(com, data[i])
+		elif recv(com) == 0x04:
+			data = draw_circle(img, 10, center_x, center_y, rat)
+			for i in range(len(data)):
+				send_data(com, data[i])
 		cv2.imshow("img", img)
 		c = cv2.waitKey(1)
 		if c == 27:
